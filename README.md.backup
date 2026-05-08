@@ -20,9 +20,7 @@ The recent power usage is read from gigital meter via [Tasmota-SML-Script](https
 [OpenDTU-OnBattery](https://github.com/hoylabs/OpenDTU-OnBattery "https://github.com/hoylabs/OpenDTU-OnBattery") reads this value and limits its AC-Output to not feed-in power to public grid. <br>
 Excess power should be stored in the B2500 battery and used when more power is required or to cover my base load after sunset. <br>
 
-This works in principle with an "open" B2500 (set to 800W max. output), but it looks like I get regulation oscillations, when Hoymiles limits the DC-in to not feed too much power and on the other hand the voltage controller of the B2500 tries to achieve 800W... however I got Upward and downward deviations.
-
-
+This works in principle with an "open" B2500 (set to 800W max. output), but it looks like I get regulation oscillations, when Hoymiles limits the DC-in to not feed too much power and on the other hand the voltage controller of the B2500 tries to achieve 800W... however I got
 
 
 

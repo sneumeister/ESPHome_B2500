@@ -164,7 +164,7 @@ ble_client:
         - delay: 1s
         - select.set:
             id: b2500_charge_mode_1
-            option: "LoadFirst"
+            option: "simultaneous_charge_and_discharge"
         - delay: 1s
         - b2500.set_timer:
             id: b2500_1
