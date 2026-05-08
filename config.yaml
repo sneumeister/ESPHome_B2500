@@ -10,6 +10,12 @@ esphome:
       - lambda: id(b2500_device_generation_1).publish_state("2");
       - lambda: id(b2500_device_name_1).publish_state("B2500");
 
+globals:
+  - id: g_dpl_limit
+    type: int
+    restore_value: no
+    initial_value: '0'
+
 esp32:
   board: "esp32dev"
   variant: "esp32"
@@ -35,7 +41,7 @@ external_components:
     components: [b2500]
 
 wifi:
-  ssid: "mniot1"
+  ssid: "MNIOT1"
   password: "DLTPYSUQTLYGUJDE!"
   reboot_timeout: 0s
   fast_connect: True
@@ -73,6 +79,31 @@ mqtt:
     - logger.log:
         level: INFO
         format: "MQTT disconnected"
+  on_message:
+    - topic: "solar/114184878827/status/limit_absolute"
+      then:
+        - lambda: |-
+            int limit = (int) atof(x.c_str());
+            if (limit < 0) limit = 0;
+            if (limit > 800) limit = 800;
+            id(g_dpl_limit) = limit;
+            ESP_LOGI("dpl", "OpenDTU DPL limit: %d W", limit);
+        - if:
+            condition:
+              lambda: 'return id(g_dpl_limit) < 50;'
+            then:
+              - b2500.set_timer:
+                  id: b2500_1
+                  generation: 2
+                  timer: 0
+                  enabled: false
+            else:
+              - b2500.set_timer:
+                  id: b2500_1
+                  generation: 2
+                  timer: 0
+                  enabled: true
+                  output_power: !lambda 'return id(g_dpl_limit);'
 
 b2500:
   - id: b2500_1
@@ -106,6 +137,23 @@ ble_client:
         - b2500.set_datetime:
             id: b2500_1
             datetime: !lambda 'return id(sntp_time).now();'
+        - delay: 1s
+        - switch.turn_off: b2500_smartmeter_enabled_1
+        - delay: 1s
+        - select.set:
+            id: b2500_charge_mode_1
+            option: "LoadFirst"
+        - delay: 1s
+        - b2500.set_timer:
+            id: b2500_1
+            generation: 2
+            timer: 0
+            enabled: !lambda 'return id(g_dpl_limit) >= 50;'
+            output_power: !lambda 'return id(g_dpl_limit) >= 50 ? id(g_dpl_limit) : 50;'
+            start_hour: 0
+            start_minute: 0
+            end_hour: 23
+            end_minute: 59
 
     on_disconnect:
       then:
@@ -143,7 +191,7 @@ button:
       disabled_by_default: True
   - platform: template
     id: b2500_button_set_wifi1
-    name: "B2500 - 1 - B2500: Set Wifi SSID / Password"
+    name: "B2500 - 1 - B2500: Set Wifi SSID and Password"
     device_id: b2500_device_1
     command_topic: "b2500/1/wifi/set"
     disabled_by_default: True
