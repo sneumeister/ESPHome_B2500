@@ -9,6 +9,28 @@ esphome:
     then:
       - lambda: id(b2500_device_generation_1).publish_state("2");
       - lambda: id(b2500_device_name_1).publish_state("B2500");
+      - wait_until:
+          condition:
+            mqtt.connected
+      - lambda: |-
+          const char *power_config =
+            "{\"name\":\"B2500 Battery Power (netto)\","
+            "\"uniq_id\":\"b2500_batt_power_netto\","
+            "\"stat_t\":\"b2500/1/battery/power_netto\","
+            "\"dev_cla\":\"power\","
+            "\"stat_cla\":\"measurement\","
+            "\"unit_of_meas\":\"W\","
+            "\"dev\":{\"ids\":[\"b2500_1\"],\"name\":\"B2500\"}}";
+          id(mqtt_client).publish("homeassistant/sensor/b2500_batt_power_netto/config", std::string(power_config), 1, true);
+          const char *current_config =
+            "{\"name\":\"B2500 Battery Current (netto)\","
+            "\"uniq_id\":\"b2500_batt_current_netto\","
+            "\"stat_t\":\"b2500/1/battery/current_netto\","
+            "\"dev_cla\":\"current\","
+            "\"stat_cla\":\"measurement\","
+            "\"unit_of_meas\":\"A\","
+            "\"dev\":{\"ids\":[\"b2500_1\"],\"name\":\"B2500\"}}";
+          id(mqtt_client).publish("homeassistant/sensor/b2500_batt_current_netto/config", std::string(current_config), 1, true);
 
 globals:
   - id: g_dpl_limit
@@ -718,6 +740,38 @@ sensor:
     accuracy_decimals: 3
     filters:
       - multiply: 0.001
+  - platform: template
+    name: "B2500 - 1 - Battery Voltage Pack"
+    id: battery_voltage_pack
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    update_interval: 5s
+    retain: false
+    accuracy_decimals: 2
+    lambda: |-
+      auto root = json::parse_json(id(b2500_device_cell_voltage_1).state);
+      if (root.isNull()) return NAN;
+      if (!root.containsKey("sum")) return NAN;
+      return root["sum"].as<float>();
+  - platform: template
+    name: "B2500 - 1 - Battery Power Netto"
+    id: battery_power_netto
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    update_interval: never
+    retain: false
+    accuracy_decimals: 1
+  - platform: template
+    name: "B2500 - 1 - Battery Current Netto"
+    id: battery_current_netto
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    update_interval: never
+    retain: false
+    accuracy_decimals: 2
   - platform: total_daily_energy
     name: "B2500 - 1 - B2500: Total Daily Energy Out"
     id: b2500_total_daily_energy_out_1
@@ -731,4 +785,26 @@ sensor:
     accuracy_decimals: 3
     filters:
       - multiply: 0.001
+
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          float p_out = id(b2500_total_power_out_1).state;
+          float p_in = id(b2500_total_power_in_1).state;
+          float p_net = (isnan(p_out) || isnan(p_in)) ? NAN : (p_out - p_in);
+          float v_pack = id(battery_voltage_pack).state;
+          float i_net = (isnan(p_net) || isnan(v_pack) || v_pack <= 1.0f) ? NAN : (p_net / v_pack);
+          id(battery_power_netto).publish_state(p_net);
+          id(battery_current_netto).publish_state(i_net);
+          if (!isnan(p_net)) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.1f", p_net);
+            id(mqtt_client).publish("b2500/1/battery/power_netto", std::string(buf), 0, false);
+          }
+          if (!isnan(i_net)) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.2f", i_net);
+            id(mqtt_client).publish("b2500/1/battery/current_netto", std::string(buf), 0, false);
+          }
 
