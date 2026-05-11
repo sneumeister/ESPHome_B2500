@@ -108,4 +108,4 @@ PS> python -m esphome upload config.yaml
 
 ## Remarks
 
-Done with support of AI: Cursor.ai <https://www.cursor.ai>
+Done with support of AI: [Cursor.com](https://www.cursor.com)
