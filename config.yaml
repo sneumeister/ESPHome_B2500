@@ -105,7 +105,7 @@ mqtt:
     - topic: "solar/114184878827/status/limit_absolute"
       then:
         - lambda: |-
-            int limit = (int) atof(x.c_str());
+            int limit = (int) atof(x.c_str()) * 0.9 ;
             if (limit < 0) limit = 0;
             if (limit > 800) limit = 800;
             id(g_dpl_limit) = limit;
