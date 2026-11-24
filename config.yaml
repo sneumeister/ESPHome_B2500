@@ -37,6 +37,14 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
+  - id: g_last_sent_limit
+    type: int
+    restore_value: no
+    initial_value: '-1'
+  - id: g_last_write_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
 
 esp32:
   board: "esp32dev"
@@ -105,27 +113,46 @@ mqtt:
     - topic: "solar/114184878827/status/limit_absolute"
       then:
         - lambda: |-
-            int limit = (int) atof(x.c_str()) * 0.9 ;
-            if (limit < 0) limit = 0;
+            int limit = (int)(atof(x.c_str()) * 0.9f);
+            if (limit < 50) limit = 0;
             if (limit > 800) limit = 800;
             id(g_dpl_limit) = limit;
-            ESP_LOGI("dpl", "OpenDTU DPL limit: %d W", limit);
-        - if:
-            condition:
-              lambda: 'return id(g_dpl_limit) < 50;'
-            then:
-              - b2500.set_timer:
-                  id: b2500_1
-                  generation: 2
-                  timer: 0
-                  enabled: false
-            else:
-              - b2500.set_timer:
-                  id: b2500_1
-                  generation: 2
-                  timer: 0
-                  enabled: true
-                  output_power: !lambda 'return id(g_dpl_limit);'
+
+            uint32_t now = millis();
+            int last = id(g_last_sent_limit);
+            int diff = abs(limit - last);
+            bool never_written = last < 0;
+            bool state_changed = (limit == 0 && last > 0) || (limit > 0 && last <= 0);
+
+            // Nur schreiben bei Erstwert, Ein/Aus, oder Δ≥25 W und ≥30 s Cooldown
+            if (never_written ||
+                (limit != last && (state_changed || (diff >= 25 && (now - id(g_last_write_ms) >= 30000))))) {
+              id(g_last_sent_limit) = limit;
+              id(g_last_write_ms) = now;
+              ESP_LOGI("dpl", "Write B2500 Timer 0: %d W", limit);
+              id(b2500_write_timer).execute();
+            }
+
+script:
+  - id: b2500_write_timer
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return id(g_last_sent_limit) < 50;'
+          then:
+            - b2500.set_timer:
+                id: b2500_1
+                generation: 2
+                timer: 0
+                enabled: false
+          else:
+            - b2500.set_timer:
+                id: b2500_1
+                generation: 2
+                timer: 0
+                enabled: true
+                output_power: !lambda 'return id(g_last_sent_limit);'
 
 b2500:
   - id: b2500_1
